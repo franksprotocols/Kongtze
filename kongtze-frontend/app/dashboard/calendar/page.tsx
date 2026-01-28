@@ -52,6 +52,21 @@ export default function CalendarPage() {
     },
   });
 
+  // Clear all sessions mutation
+  const clearAllMutation = useMutation({
+    mutationFn: async () => {
+      // Delete all sessions one by one
+      await Promise.all(sessions.map((session) => studySessionsAPI.delete(session.session_id, token!)));
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['study-sessions'] });
+      alert('Calendar cleared successfully!');
+    },
+    onError: () => {
+      alert('Failed to clear calendar. Please try again.');
+    },
+  });
+
   const getSessionsForSlot = (dayIndex: number, timeSlot: string) => {
     return sessions.filter((session) => {
       const sessionHour = session.start_time.split(':')[0];
@@ -67,6 +82,12 @@ export default function CalendarPage() {
   const handleDeleteSession = (id: number) => {
     if (confirm('Are you sure you want to delete this study session?')) {
       deleteMutation.mutate(id);
+    }
+  };
+
+  const handleClearCalendar = () => {
+    if (confirm('Are you sure you want to clear ALL study sessions? This cannot be undone.')) {
+      clearAllMutation.mutate();
     }
   };
 
@@ -90,6 +111,13 @@ export default function CalendarPage() {
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
           >
             + Add Study Session
+          </button>
+          <button
+            onClick={handleClearCalendar}
+            disabled={clearAllMutation.isPending || sessions.length === 0}
+            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {clearAllMutation.isPending ? 'Clearing...' : '🗑️ Clear Calendar'}
           </button>
         </div>
       </div>
