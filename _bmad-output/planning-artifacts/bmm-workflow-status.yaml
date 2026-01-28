@@ -1,0 +1,109 @@
+# Workflow Status - Kongtze Project
+# Tracks progress through BMM methodology Analysis, Planning, and Solutioning phases
+# Implementation phase is tracked separately in sprint-status.yaml
+
+# STATUS DEFINITIONS:
+# ==================
+# Initial Status (before completion):
+#   - required: Must be completed to progress
+#   - optional: Can be completed but not required
+#   - recommended: Strongly suggested but not required
+#   - conditional: Required only if certain conditions met (e.g., if_has_ui)
+#
+# Completion Status:
+#   - {file-path}: File created/found (e.g., "docs/product-brief.md")
+#   - skipped: Optional/conditional workflow that was skipped
+
+generated: "2026-01-19"
+project: "Kongtze"
+project_type: "Education app with AI-powered study planning and gamified testing"
+selected_track: "bmad-method"
+field_type: "greenfield"
+workflow_path: "_bmad/bmm/workflows/workflow-status/paths/method-greenfield.yaml"
+
+workflow_status:
+  # Phase 1: Analysis (Optional)
+  - phase: 1
+    name: "Analysis"
+    workflows:
+      - id: "brainstorm-project"
+        name: "Brainstorm"
+        agent: "brainstorming-coach"
+        command: "/bmad:core:workflows:brainstorming"
+        status: "optional"
+        note: "Creative exploration and ideation - User selected"
+
+      - id: "research"
+        name: "Research"
+        agent: "analyst"
+        command: "/bmad:bmm:workflows:research"
+        status: "skipped"
+        note: "Technical/competitive analysis - Not selected by user"
+
+      - id: "product-brief"
+        name: "Product Brief"
+        agent: "analyst"
+        command: "/bmad:bmm:workflows:create-product-brief"
+        status: "optional"
+        note: "Strategic product planning - User selected"
+
+  # Phase 2: Planning
+  - phase: 2
+    name: "Planning"
+    workflows:
+      - id: "prd"
+        name: "Product Requirements Document"
+        agent: "pm"
+        command: "/bmad:bmm:workflows:prd"
+        status: "required"
+        note: "Detailed requirements and user stories"
+
+      - id: "create-ux-design"
+        name: "UX Design"
+        agent: "ux-designer"
+        command: "/bmad:bmm:workflows:create-ux-design"
+        status: "conditional"
+        note: "Required if UI exists - determine after PRD"
+
+  # Phase 3: Solutioning
+  - phase: 3
+    name: "Solutioning"
+    workflows:
+      - id: "create-architecture"
+        name: "Architecture"
+        agent: "architect"
+        command: "/bmad:bmm:workflows:create-architecture"
+        status: "required"
+        note: "System architecture and technical design"
+
+      - id: "create-epics-and-stories"
+        name: "Epics & Stories"
+        agent: "sm"
+        command: "/bmad:bmm:workflows:create-epics-and-stories"
+        status: "required"
+        note: "Break down into implementable stories"
+
+      - id: "test-design"
+        name: "Test Design"
+        agent: "tea"
+        command: "/bmad:bmm:workflows:testarch-test-design"
+        status: "optional"
+        note: "System-level testability review"
+
+      - id: "implementation-readiness"
+        name: "Implementation Readiness Check"
+        agent: "architect"
+        command: "/bmad:bmm:workflows:check-implementation-readiness"
+        status: "required"
+        note: "Validates PRD + Architecture + Epics + UX"
+
+  # Phase 4: Implementation
+  - phase: 4
+    name: "Implementation"
+    workflows:
+      - id: "sprint-planning"
+        name: "Sprint Planning"
+        agent: "sm"
+        command: "/bmad:bmm:workflows:sprint-planning"
+        status: "required"
+        note: "Creates sprint plan - subsequent work tracked in sprint-status.yaml"

@@ -16,6 +16,7 @@ from app.schemas.study_session import (
 )
 from app.api.deps import get_current_user
 from app.services.ai_service import ai_service
+from app.services.adaptive_difficulty_service import adaptive_difficulty_service
 import json
 
 router = APIRouter(prefix="/study-sessions", tags=["Study Sessions"])
@@ -238,9 +239,24 @@ async def generate_schedule(
     # Build subject info with difficulty levels
     subject_difficulties = preferences.get("subjectDifficulties", {})
     subject_info = []
+
+    # Get adaptive difficulty for each subject
+    adaptive_difficulties = {}
     for s in selected_subjects:
-        difficulty = subject_difficulties.get(str(s.subject_id), "intermediate")
-        subject_info.append(f"{s.display_name} ({difficulty} level)")
+        # Try to get recommended difficulty from analytics
+        recommended_difficulty = await adaptive_difficulty_service.calculate_recommended_difficulty(
+            user_id=current_user.user_id,
+            subject_id=s.subject_id,
+            db=db
+        )
+        adaptive_difficulties[s.subject_id] = recommended_difficulty
+
+        # Map difficulty level to text
+        difficulty_map = {1: "beginner", 2: "intermediate", 3: "advanced", 4: "expert"}
+        difficulty_text = difficulty_map.get(recommended_difficulty, "intermediate")
+
+        subject_info.append(f"{s.display_name} ({difficulty_text} level - adaptive)")
+
 
     # Build AI prompt
     prompt = f"""Generate an optimized weekly study schedule with the following requirements:
@@ -249,6 +265,15 @@ Subjects to study: {', '.join(subject_info)}
 Target study hours per day: {preferences.get('hoursPerDay', 2)} hours
 Time window: {preferences.get('startTime', '14:00')} to {preferences.get('endTime', '20:00')}
 Goals: {preferences.get('goals', 'Balanced learning across all subjects')}
+
+ADAPTIVE DIFFICULTY GUIDANCE:
+The difficulty levels shown are based on the student's recent performance analytics.
+These levels have been automatically calculated to optimize learning progression.
+
+PROGRESSIVE DIFFICULTY CURVE:
+- Early week (Monday-Tuesday): Focus on review and reinforcement
+- Mid week (Wednesday-Thursday): Introduce new concepts at recommended difficulty
+- Late week (Friday-Sunday): Challenge sessions and practice
 
 IMPORTANT CONSTRAINTS:
 1. ALL sessions MUST be within the time window {preferences.get('startTime', '14:00')} to {preferences.get('endTime', '20:00')}
@@ -260,10 +285,12 @@ IMPORTANT CONSTRAINTS:
 7. Consider each subject's difficulty level when planning
 8. Include rest days (1-2 days with no or minimal study)
 9. More difficult subjects may need longer or more frequent sessions
-10. WEEKDAY SESSIONS (Monday-Friday): Schedule EXACTLY 1 session BEFORE dinner (before 19:00) and EXACTLY 2 sessions AFTER dinner (after 19:40)
-11. WEEKEND SESSIONS (Saturday-Sunday): Schedule EXACTLY 2 sessions between 11:00 AM and 4:00 PM (11:00-16:00)
+10. WEEKDAY SESSIONS (Monday-Friday, days 0-4): Schedule EXACTLY 1 session BEFORE dinner (before 19:00) and EXACTLY 2 sessions AFTER dinner (after 19:40)
+11. WEEKEND SESSIONS (Saturday=day 5, Sunday=day 6): Schedule EXACTLY 2 sessions between 11:00 AM and 4:00 PM (11:00-16:00) for BOTH Saturday AND Sunday
 
-Create a balanced weekly schedule (Monday to Sunday) that respects ALL constraints above.
+IMPORTANT: You MUST include sessions for ALL 7 days of the week (Monday through Sunday, days 0-6). Do NOT skip Sunday (day 6)!
+
+Create a balanced weekly schedule covering ALL 7 days (Monday=0 to Sunday=6) that respects ALL constraints above.
 
 Return ONLY a JSON array with this exact structure (no markdown, no explanation):
 [
@@ -280,7 +307,7 @@ start_time: Must be in HH:MM:SS format and within the specified time window
 duration_minutes: Must be 30 or 45 ONLY
 subject_name: Must match exactly one of the subjects listed above
 
-CRITICAL: Ensure NO sessions overlap with 19:00-19:40 (dinner time) and ALL sessions are within {preferences.get('startTime', '14:00')} to {preferences.get('endTime', '20:00')}. Maximum 3 sessions per day. Each subject appears only once per day. Weekdays: 1 before dinner + 2 after dinner. Weekends: 2 sessions between 11:00-16:00.
+CRITICAL: Ensure NO sessions overlap with 19:00-19:40 (dinner time) and ALL sessions are within {preferences.get('startTime', '14:00')} to {preferences.get('endTime', '20:00')}. Maximum 3 sessions per day. Each subject appears only once per day. Weekdays (days 0-4): 1 before dinner + 2 after dinner. Weekends (days 5-6): 2 sessions between 11:00-16:00. MUST include BOTH Saturday (day 5) AND Sunday (day 6) sessions!
 """
 
     # Call AI service
@@ -424,14 +451,21 @@ CRITICAL: Ensure NO sessions overlap with 19:00-19:40 (dinner time) and ALL sess
             subject_id = subject_map.get(subject_name)
 
             if subject_id:
+                # Add adaptive difficulty level for this subject
+                difficulty_level = adaptive_difficulties.get(subject_id, 2)
+
                 schedule.append({
                     "day_of_week": session["day_of_week"],
                     "subject_id": subject_id,
                     "start_time": session["start_time"],
                     "duration_minutes": session["duration_minutes"],
+                    "recommended_difficulty": difficulty_level,
                 })
 
-        return {"schedule": schedule}
+        return {
+            "schedule": schedule,
+            "adaptive_difficulties": adaptive_difficulties
+        }
 
     except json.JSONDecodeError as e:
         raise HTTPException(

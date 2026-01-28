@@ -27,6 +27,8 @@ from app.schemas.test import (
 )
 from app.api.deps import get_current_user
 from app.services.ai_service import ai_service
+from app.services.test_context_builder import test_context_builder
+from app.services.adaptive_difficulty_service import adaptive_difficulty_service
 
 router = APIRouter(prefix="/tests", tags=["Tests"])
 
@@ -64,6 +66,14 @@ async def create_test(
     # Fetch context from notes/homework if provided
     context_text = None
     context_parts = []
+
+    # Build comprehensive context using TestContextBuilder
+    comprehensive_context = await test_context_builder.build_context(
+        user_id=current_user.user_id,
+        subject_id=test_data.subject_id,
+        db=db
+    )
+    context_parts.append(comprehensive_context)
 
     if test_data.note_ids:
         # Fetch notes
@@ -117,14 +127,41 @@ async def create_test(
     if context_parts:
         context_text = "\n\n".join(context_parts)
 
+    # Use adaptive difficulty if not explicitly specified or use recommended
+    difficulty_level = test_data.difficulty_level
+    if not difficulty_level or difficulty_level == 0:
+        difficulty_level = await adaptive_difficulty_service.calculate_recommended_difficulty(
+            user_id=current_user.user_id,
+            subject_id=test_data.subject_id,
+            db=db
+        )
+
+    # Use dynamic question count if not specified
+    total_questions = test_data.total_questions
+    if not total_questions or total_questions == 0:
+        total_questions = await adaptive_difficulty_service.calculate_dynamic_question_count(
+            user_id=current_user.user_id,
+            subject_id=test_data.subject_id,
+            session_length_minutes=test_data.time_limit_minutes or 30,
+            difficulty_level=difficulty_level,
+            db=db
+        )
+
+    # Calculate individual time limits for questions
+    individual_time_limits = adaptive_difficulty_service.calculate_individual_time_limits(
+        question_count=total_questions,
+        session_length_minutes=test_data.time_limit_minutes or 30,
+        difficulty_level=difficulty_level
+    )
+
     # Create test record
     new_test = Test(
         user_id=current_user.user_id,
         subject_id=test_data.subject_id,
         title=test_data.title,
-        difficulty_level=test_data.difficulty_level,
+        difficulty_level=difficulty_level,
         time_limit_minutes=test_data.time_limit_minutes,
-        total_questions=test_data.total_questions,
+        total_questions=total_questions,
         source_note_ids=json.dumps(test_data.note_ids) if test_data.note_ids else None,
         source_homework_ids=json.dumps(test_data.homework_ids) if test_data.homework_ids else None,
         generation_mode=test_data.generation_mode,
@@ -137,21 +174,23 @@ async def create_test(
     # Generate questions using AI
     ai_questions = await ai_service.generate_test_questions(
         subject=subject.display_name,
-        difficulty_level=test_data.difficulty_level,
-        num_questions=test_data.total_questions,
+        difficulty_level=difficulty_level,
+        num_questions=total_questions,
         context_text=context_text,
     )
 
     # Create question records
     questions = []
-    for idx, q_data in enumerate(ai_questions):
+    for i, q_data in enumerate(ai_questions):
+        # Use individual time limit if available, otherwise use default
+        time_limit = individual_time_limits[i] if i < len(individual_time_limits) else 60
+
         question = Question(
             test_id=new_test.test_id,
             question_text=q_data["question_text"],
-            question_order=idx + 1,  # 1-based ordering
             options=q_data["options"],
             correct_answer=q_data["correct_answer"],
-            time_limit_seconds=q_data.get("time_limit_seconds", 60),
+            time_limit_seconds=time_limit,
         )
         db.add(question)
         questions.append(question)
@@ -298,7 +337,7 @@ async def submit_test(
         test_id=submission.test_id,
         user_id=current_user.user_id,
         score=score,
-        total_score=total_score,
+        total_points=total_score,
         time_taken_seconds=submission.time_taken_seconds,
         answers=submission.answers,
         reward_points=reward_points,
@@ -322,12 +361,21 @@ async def submit_test(
     reward = Reward(
         user_id=current_user.user_id,
         points=reward_points,
-        reason=f"Completed test: {test.title} ({score}/{total_score})",
+        source_type="test_completion",
+        source_id=test.test_id,
+        description=f"Completed test: {test.title} ({score}/{total_score})",
         balance=current_balance + reward_points,
     )
 
     db.add(reward)
     await db.flush()
+
+    # Update performance analytics after test completion
+    await adaptive_difficulty_service.update_performance_analytics(
+        user_id=current_user.user_id,
+        subject_id=test.subject_id,
+        db=db
+    )
 
     return TestResultResponse.model_validate(test_result)
 
@@ -372,7 +420,7 @@ async def get_test_result(
     ]
 
     result_response = TestResultResponse.model_validate(test_result)
-    percentage = (test_result.score / test_result.total_score * 100) if test_result.total_score > 0 else 0
+    percentage = (test_result.score / test_result.total_points * 100) if test_result.total_points > 0 else 0
 
     return TestResultWithReview(
         **result_response.model_dump(),
@@ -392,7 +440,7 @@ async def get_test_results(
     result = await db.execute(
         select(TestResult)
         .where(TestResult.user_id == current_user.user_id)
-        .order_by(TestResult.completed_at.desc())
+        .order_by(TestResult.submitted_at.desc())
     )
     test_results = result.scalars().all()
 

@@ -21,18 +21,32 @@ class AIService:
     
     async def _call_gemini_api(self, prompt: str) -> str:
         """Call Gemini API directly using REST"""
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(
-                f"{self.api_url}?key={self.api_key}",
-                json={
-                    "contents": [{
-                        "parts": [{"text": prompt}]
-                    }]
-                }
-            )
-            response.raise_for_status()
-            data = response.json()
-            return data["candidates"][0]["content"]["parts"][0]["text"]
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                response = await client.post(
+                    f"{self.api_url}?key={self.api_key}",
+                    json={
+                        "contents": [{
+                            "parts": [{"text": prompt}]
+                        }]
+                    }
+                )
+                response.raise_for_status()
+                data = response.json()
+                return data["candidates"][0]["content"]["parts"][0]["text"]
+        except httpx.HTTPStatusError as e:
+            error_detail = e.response.text if hasattr(e.response, 'text') else str(e)
+            print(f"Gemini API HTTP error: {e.response.status_code} - {error_detail}")
+            raise Exception(f"Gemini API returned {e.response.status_code}: {error_detail}")
+        except httpx.TimeoutException as e:
+            print(f"Gemini API timeout: {str(e)}")
+            raise Exception(f"Gemini API request timed out after 30 seconds")
+        except KeyError as e:
+            print(f"Gemini API response parsing error: {str(e)}")
+            raise Exception(f"Unexpected response format from Gemini API: missing {str(e)}")
+        except Exception as e:
+            print(f"Gemini API unexpected error: {type(e).__name__} - {str(e)}")
+            raise Exception(f"Gemini API call failed: {type(e).__name__} - {str(e)}")
 
     async def generate_test_questions(
         self,
@@ -50,7 +64,6 @@ class AIService:
             difficulty_level: 1=Beginner, 2=Intermediate, 3=Advanced, 4=Expert
             num_questions: Number of questions to generate
             topics: Optional list of specific topics to focus on
-            context_text: Optional context from notes/homework to base questions on
 
         Returns:
             List of question dictionaries with question_text, options, correct_answer
@@ -66,16 +79,7 @@ class AIService:
         if topics:
             topics_context = f"\nFocus on these specific topics: {', '.join(topics)}"
 
-        # Add context from notes/homework if provided
-        context_section = ""
-        if context_text:
-            # Truncate context to 4000 characters max
-            truncated_context = context_text[:4000]
-            if len(context_text) > 4000:
-                truncated_context += "... (truncated)"
-            context_section = f"\n\nGenerate questions based on this content:\n{truncated_context}\n"
-
-        prompt = f"""Generate {num_questions} multiple-choice questions for {subject} at {difficulty_names[difficulty_level]}.{topics_context}{context_section}
+        prompt = f"""Generate {num_questions} multiple-choice questions for {subject} at {difficulty_names[difficulty_level]}.{topics_context}
 
 Requirements:
 1. Each question should have 4 options (A, B, C, D)
@@ -246,7 +250,10 @@ Keep the explanation simple, encouraging, and educational (2-3 sentences)."""
         try:
             return await self._call_gemini_api(prompt)
         except Exception as e:
-            raise Exception(f"AI generation failed: {str(e)}")
+            # Re-raise with the original error message
+            error_msg = str(e) if str(e) else f"{type(e).__name__} occurred"
+            print(f"generate_text error: {error_msg}")
+            raise Exception(f"AI generation failed: {error_msg}")
 
     async def extract_topics_from_notes(
         self,
