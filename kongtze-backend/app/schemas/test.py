@@ -23,7 +23,6 @@ class QuestionResponse(QuestionBase):
     """Schema for question response (without correct answer)"""
     question_id: int
     test_id: int
-    created_at: datetime
 
     class Config:
         from_attributes = True
