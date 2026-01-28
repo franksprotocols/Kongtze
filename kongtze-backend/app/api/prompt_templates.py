@@ -238,3 +238,113 @@ async def preview_prompt(
             detail=f"Error rendering template: {str(e)}",
         )
 
+
+@router.post("/{template_id}/render-complete")
+async def render_complete_prompt(
+    template_id: int,
+    user_id: int,
+    subject_id: int,
+    num_questions: int = 10,
+    difficulty_level: int = 2,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """
+    Render a complete prompt with full context for test generation
+
+    Args:
+        template_id: Template ID
+        user_id: User ID for context
+        subject_id: Subject ID for context
+        num_questions: Number of questions to generate
+        difficulty_level: Difficulty level (1-4)
+
+    Returns:
+        Dictionary with the complete rendered prompt and all context used
+    """
+    from app.services.test_context_builder import test_context_builder
+    from app.models.subject import Subject
+    from app.models.student_profile import StudentProfile
+
+    # Get template
+    result = await db.execute(
+        select(AIPromptTemplate).where(AIPromptTemplate.template_id == template_id)
+    )
+    template = result.scalar_one_or_none()
+
+    if not template:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Prompt template not found",
+        )
+
+    # Get subject
+    subject_result = await db.execute(
+        select(Subject).where(Subject.subject_id == subject_id)
+    )
+    subject = subject_result.scalar_one_or_none()
+
+    if not subject:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Subject not found",
+        )
+
+    # Get student profile
+    profile_result = await db.execute(
+        select(StudentProfile).where(StudentProfile.user_id == user_id)
+    )
+    profile = profile_result.scalar_one_or_none()
+
+    # Build context
+    context = await test_context_builder.build_context(
+        user_id=user_id,
+        subject_id=subject_id,
+        db=db
+    )
+
+    # Prepare variables for rendering
+    variables = {
+        "context": context,
+        "num_questions": num_questions,
+        "difficulty_level": difficulty_level,
+        "age": profile.age if profile else "unknown",
+        "grade_level": profile.grade_level if profile else "unknown",
+        "subject_name": subject.name,
+        "subject_level": "unknown",
+        "strengths": ", ".join(profile.strengths) if profile and profile.strengths else "none specified",
+        "weaknesses": ", ".join(profile.weaknesses) if profile and profile.weaknesses else "none specified",
+        "question_types": "multiple_choice, true_false, short_answer, essay"
+    }
+
+    # Determine subject level based on subject name
+    if profile:
+        if "math" in subject.name.lower():
+            variables["subject_level"] = profile.math_level
+        elif "english" in subject.name.lower():
+            variables["subject_level"] = profile.english_level
+        elif "chinese" in subject.name.lower():
+            variables["subject_level"] = profile.chinese_level
+
+    # Render the template
+    try:
+        rendered_prompt = template.prompt_template.format(**variables)
+        return {
+            "template_id": template_id,
+            "template_name": template.template_name,
+            "rendered_prompt": rendered_prompt,
+            "variables_used": variables,
+            "context_length": len(context),
+            "estimated_tokens": len(rendered_prompt) // 4  # Rough estimate
+        }
+    except KeyError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Missing required variable: {str(e)}",
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Error rendering template: {str(e)}",
+        )
+

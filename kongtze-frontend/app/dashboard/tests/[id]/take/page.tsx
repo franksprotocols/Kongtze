@@ -5,16 +5,17 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/auth-context';
 import { testsAPI } from '@/lib/api';
 
-export default function TakeTestPage({ params }: { params: { id: string } }) {
+export default function TakeTestPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
   const { token } = useAuth();
-  const testId = parseInt(params.id);
+  const resolvedParams = use(params);
+  const testId = parseInt(resolvedParams.id);
 
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});

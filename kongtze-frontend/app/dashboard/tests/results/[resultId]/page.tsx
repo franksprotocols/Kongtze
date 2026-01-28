@@ -5,14 +5,16 @@
 
 'use client';
 
+import { use } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/auth-context';
 import { testsAPI } from '@/lib/api';
 import Link from 'next/link';
 
-export default function TestResultPage({ params }: { params: { resultId: string } }) {
+export default function TestResultPage({ params }: { params: Promise<{ resultId: string }> }) {
   const { token } = useAuth();
-  const resultId = parseInt(params.resultId);
+  const resolvedParams = use(params);
+  const resultId = parseInt(resolvedParams.resultId);
 
   const { data: result, isLoading } = useQuery({
     queryKey: ['test-result', resultId],

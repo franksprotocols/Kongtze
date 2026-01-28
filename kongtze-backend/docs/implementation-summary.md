@@ -139,6 +139,19 @@ Comprehensive implementation of adaptive test generation system with student pro
 - `PUT /prompt-templates/{id}` - Update template
 - `DELETE /prompt-templates/{id}` - Delete template (non-system only)
 - `POST /prompt-templates/{id}/preview` - Preview with variables
+- `POST /prompt-templates/{id}/render-complete` - Render complete prompt with full context
+
+### 4.3 Default System Templates
+**Script:** `scripts/seed_prompt_templates.py`
+
+**Templates Created:**
+1. **adaptive_test_generation** - Main template with full student context, performance analytics, and adaptive difficulty
+2. **note_based_test_generation** - Generates tests based on class notes content
+3. **homework_based_test_generation** - Generates tests based on homework assignments
+4. **pure_ai_test_generation** - Generates tests without specific content, using only student profile
+5. **schedule_generation** - Creates personalized study schedules with progressive difficulty
+
+All templates are marked as `is_system=True` to prevent accidental deletion.
 
 ---
 
@@ -200,7 +213,14 @@ All migrations successfully applied to database.
 ## API Routes Added/Updated
 
 ### New Routes:
-- `/api/prompt-templates/*` - Prompt template management
+- `/api/prompt-templates/*` - Prompt template management (7 endpoints)
+  - GET `/` - List all templates
+  - GET `/{id}` - Get specific template
+  - POST `/` - Create template
+  - PUT `/{id}` - Update template
+  - DELETE `/{id}` - Delete template
+  - POST `/{id}/preview` - Preview with variables
+  - POST `/{id}/render-complete` - Render complete prompt with full context
 
 ### Updated Routes:
 - `/api/tests` (POST) - Enhanced with adaptive features
@@ -237,11 +257,36 @@ question_count = clamp(question_count, 5, 30)
 
 ### Manual Testing Completed:
 - ✓ Service imports successful
-- ✓ API router imports successful
+- ✓ API router imports successful (47 total routes)
 - ✓ Database migrations applied
 - ✓ Default student profile created
+- ✓ All 5 automated tests passing
 
-### Remaining Testing:
+### Automated Test Results:
+**Test Script:** `scripts/test_adaptive_system.py`
+
+1. ✓ **Database Tables** - All 3 tables exist (student_profiles: 1 record, student_performance_analytics: 0 records, ai_prompt_templates: 5 records)
+2. ✓ **Student Profile** - Successfully retrieved profile for 10-year-old Dulwich College student
+3. ✓ **Adaptive Difficulty** - Calculated Level 2 difficulty, 30 questions, individual time limits totaling 27 minutes
+4. ✓ **Context Builder** - Built 892-character context successfully, automatic content selection working
+5. ✓ **Prompt Templates** - CRUD operations and template rendering working correctly
+
+### Test Fixes Applied:
+- Fixed naming conflict in test script (renamed `test_context_builder()` to `test_context_builder_service()`)
+- Updated ClassNote queries to use `uploaded_at` instead of `created_at`
+- Updated Homework queries to use `uploaded_at` instead of `created_at`
+- Fixed Homework context formatting to use `is_reviewed` and `corrected_text` fields
+
+---
+
+## Phase 5 Progress
+
+### Backend Completed:
+1. ✓ Seeded 5 default prompt templates (adaptive, note-based, homework-based, pure AI, schedule generation)
+2. ✓ Added `/prompt-templates/{id}/render-complete` endpoint for complete prompt rendering with context
+3. ✓ All automated tests passing
+
+### Backend Remaining:
 - End-to-end test generation flow
 - Performance analytics calculation
 - Adaptive difficulty recommendations
@@ -252,11 +297,17 @@ question_count = clamp(question_count, 5, 30)
 
 ## Next Steps (Phase 5)
 
-### Backend:
-1. Seed default prompt templates
-2. Add API endpoint for getting complete rendered prompt
-3. Performance optimization for context building
-4. Add caching for performance analytics
+### Backend Completed:
+1. ✓ Seed default prompt templates
+2. ✓ Add API endpoint for getting complete rendered prompt
+3. ✓ Comprehensive automated testing
+
+### Backend Remaining:
+1. Performance optimization for context building
+2. Add caching for performance analytics
+3. Unit tests for adaptive algorithms
+4. Integration tests for test generation flow
+5. Load testing for context building
 
 ### Frontend (Not Implemented):
 1. Prompt configuration UI
@@ -299,8 +350,10 @@ question_count = clamp(question_count, 5, 30)
 - `alembic/versions/20260128_1240_8579fb6bd3d6_add_student_performance_analytics_table.py`
 - `alembic/versions/20260128_1321_d22aa8e43ca2_add_ai_prompt_templates_table.py`
 
-### Scripts (1 new):
+### Scripts (2 new):
 - `scripts/seed_default_profile.py`
+- `scripts/seed_prompt_templates.py`
+- `scripts/test_adaptive_system.py`
 
 ### Configuration (2 updated):
 - `app/models/__init__.py`

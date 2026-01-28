@@ -82,11 +82,11 @@ class TestResultResponse(BaseModel):
     test_id: int
     user_id: int
     score: int
-    total_score: int
+    total_points: int
     time_taken_seconds: int
     answers: Dict[str, str]
     reward_points: int
-    completed_at: datetime
+    submitted_at: datetime
 
     class Config:
         from_attributes = True
