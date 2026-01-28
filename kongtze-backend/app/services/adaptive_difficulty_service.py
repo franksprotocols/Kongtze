@@ -9,6 +9,7 @@ from decimal import Decimal
 from app.models.test_result import TestResult
 from app.models.test import Test
 from app.models.student_performance_analytics import StudentPerformanceAnalytics
+from app.core.cache import cached, invalidate_cache
 
 
 class AdaptiveDifficultyService:
@@ -23,6 +24,7 @@ class AdaptiveDifficultyService:
     FAST_TIME_MULTIPLIER = 0.8   # If time < 80% of expected, student is fast
     SLOW_TIME_MULTIPLIER = 1.2   # If time > 120% of expected, student is slow
 
+    @cached(ttl=300, key_prefix="adaptive_difficulty")
     async def calculate_recommended_difficulty(
         self,
         user_id: int,
@@ -217,6 +219,9 @@ class AdaptiveDifficultyService:
 
         await db.commit()
         await db.refresh(analytics)
+
+        # Invalidate cache for this user/subject
+        invalidate_cache(f"adaptive_difficulty:{user_id}:{subject_id}")
 
         return analytics
 

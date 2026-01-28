@@ -12,11 +12,13 @@ from app.models.class_note import ClassNote
 from app.models.homework import Homework
 from app.models.test import Test
 from app.models.question import Question
+from app.core.cache import cached
 
 
 class TestContextBuilder:
     """Build comprehensive context for AI test generation"""
 
+    @cached(ttl=180, key_prefix="test_context")
     async def build_context(
         self,
         user_id: int,
