@@ -144,10 +144,11 @@ async def create_test(
 
     # Create question records
     questions = []
-    for q_data in ai_questions:
+    for idx, q_data in enumerate(ai_questions):
         question = Question(
             test_id=new_test.test_id,
             question_text=q_data["question_text"],
+            question_order=idx + 1,  # 1-based ordering
             options=q_data["options"],
             correct_answer=q_data["correct_answer"],
             time_limit_seconds=q_data.get("time_limit_seconds", 60),
