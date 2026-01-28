@@ -196,9 +196,9 @@ npm run dev
 ## 📊 API Configuration
 
 ### Gemini API Key
-✅ Already configured in `.env`:
+⚠️ **SECURITY**: Configure in `.env` file (never commit to git):
 ```
-GEMINI_API_KEY=***REMOVED***
+GEMINI_API_KEY=your_gemini_api_key_here
 ```
 
 Used for:
@@ -208,8 +208,9 @@ Used for:
 - Answer explanations with caching
 
 ### Database Connection
+⚠️ **SECURITY**: Configure in `.env` file (never commit to git):
 ```
-DATABASE_URL=postgresql+asyncpg://***REMOVED***:5432/kongtze
+DATABASE_URL=postgresql+asyncpg://username:password@localhost:5432/kongtze
 ```
 
 ## 🎯 What You Can Build Next
