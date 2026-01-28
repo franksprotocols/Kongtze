@@ -252,12 +252,14 @@ Goals: {preferences.get('goals', 'Balanced learning across all subjects')}
 
 IMPORTANT CONSTRAINTS:
 1. ALL sessions MUST be within the time window {preferences.get('startTime', '14:00')} to {preferences.get('endTime', '20:00')}
-2. AVOID dinner time: 19:00-19:30 (7:00 PM - 7:30 PM) - do NOT schedule any sessions during this time
-3. Session durations should be 30, 45, 60, or 90 minutes
-4. Distribute subjects evenly across the week
-5. Consider each subject's difficulty level when planning
-6. Include rest days (1-2 days with no or minimal study)
-7. More difficult subjects may need longer or more frequent sessions
+2. AVOID dinner time: 19:00-19:40 (7:00 PM - 7:40 PM) - do NOT schedule any sessions during this time
+3. Session durations should be 30 or 45 minutes ONLY (no 60 or 90 minute sessions)
+4. Maximum 3 sessions per day - NEVER schedule more than 3 sessions on any single day
+5. Each subject can only appear ONCE per day - do NOT schedule the same subject twice on the same day
+6. Distribute subjects evenly across the week
+7. Consider each subject's difficulty level when planning
+8. Include rest days (1-2 days with no or minimal study)
+9. More difficult subjects may need longer or more frequent sessions
 
 Create a balanced weekly schedule (Monday to Sunday) that respects ALL constraints above.
 
@@ -273,10 +275,10 @@ Return ONLY a JSON array with this exact structure (no markdown, no explanation)
 
 day_of_week: 0=Monday, 1=Tuesday, ..., 6=Sunday
 start_time: Must be in HH:MM:SS format and within the specified time window
-duration_minutes: Must be 30, 45, 60, or 90
+duration_minutes: Must be 30 or 45 ONLY
 subject_name: Must match exactly one of the subjects listed above
 
-CRITICAL: Ensure NO sessions overlap with 19:00-19:30 (dinner time) and ALL sessions are within {preferences.get('startTime', '14:00')} to {preferences.get('endTime', '20:00')}.
+CRITICAL: Ensure NO sessions overlap with 19:00-19:40 (dinner time) and ALL sessions are within {preferences.get('startTime', '14:00')} to {preferences.get('endTime', '20:00')}. Maximum 3 sessions per day. Each subject appears only once per day.
 """
 
     # Call AI service
@@ -293,6 +295,72 @@ CRITICAL: Ensure NO sessions overlap with 19:00-19:30 (dinner time) and ALL sess
             response_text = response_text.replace("```json", "").replace("```", "").strip()
 
         schedule_data = json.loads(response_text)
+
+        # Validate schedule constraints
+        validation_errors = []
+
+        # Group sessions by day for validation
+        sessions_by_day = {}
+        for session in schedule_data:
+            day = session.get("day_of_week")
+            if day not in sessions_by_day:
+                sessions_by_day[day] = []
+            sessions_by_day[day].append(session)
+
+        # Validate each day
+        for day, day_sessions in sessions_by_day.items():
+            # Check max 3 sessions per day
+            if len(day_sessions) > 3:
+                validation_errors.append(f"Day {day} has {len(day_sessions)} sessions (max 3 allowed)")
+
+            # Check no repeated subjects per day
+            subjects_seen = set()
+            for session in day_sessions:
+                subject = session.get("subject_name")
+                if subject in subjects_seen:
+                    validation_errors.append(f"Day {day} has duplicate subject: {subject}")
+                subjects_seen.add(subject)
+
+            # Check session durations
+            for session in day_sessions:
+                duration = session.get("duration_minutes")
+                if duration not in [30, 45]:
+                    validation_errors.append(f"Invalid duration {duration} minutes (must be 30 or 45)")
+
+            # Check dinner time conflict (19:00-19:40)
+            for session in day_sessions:
+                start_time = session.get("start_time", "")
+                duration = session.get("duration_minutes", 0)
+
+                # Parse start time
+                if start_time:
+                    try:
+                        time_parts = start_time.split(":")
+                        if len(time_parts) < 2:
+                            validation_errors.append(f"Invalid time format: {start_time}")
+                            continue
+                        hour, minute = int(time_parts[0]), int(time_parts[1])
+                        if hour < 0 or hour > 23 or minute < 0 or minute > 59:
+                            validation_errors.append(f"Invalid time values: {start_time}")
+                            continue
+                        start_minutes = hour * 60 + minute
+                        end_minutes = start_minutes + duration
+
+                        # Dinner time: 19:00 (1140 min) to 19:40 (1180 min)
+                        dinner_start = 19 * 60  # 1140
+                        dinner_end = 19 * 60 + 40  # 1180
+
+                        # Check if session overlaps with dinner time
+                        if not (end_minutes <= dinner_start or start_minutes >= dinner_end):
+                            validation_errors.append(f"Session at {start_time} conflicts with dinner time (19:00-19:40)")
+                    except (ValueError, IndexError) as e:
+                        validation_errors.append(f"Invalid time format: {start_time}")
+
+        if validation_errors:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Generated schedule violates constraints: {'; '.join(validation_errors)}. Please try again.",
+            )
 
         # Map subject names to IDs
         subject_map = {s.display_name: s.subject_id for s in all_subjects}
