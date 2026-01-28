@@ -137,10 +137,10 @@ class TestContextBuilder:
                 and_(
                     ClassNote.user_id == user_id,
                     ClassNote.subject_id == subject_id,
-                    ClassNote.created_at >= cutoff_date
+                    ClassNote.uploaded_at >= cutoff_date
                 )
             )
-            .order_by(desc(ClassNote.created_at))
+            .order_by(desc(ClassNote.uploaded_at))
         )
 
         return result.scalars().all()
@@ -161,10 +161,10 @@ class TestContextBuilder:
                 and_(
                     Homework.user_id == user_id,
                     Homework.subject_id == subject_id,
-                    Homework.created_at >= cutoff_date
+                    Homework.uploaded_at >= cutoff_date
                 )
             )
-            .order_by(desc(Homework.created_at))
+            .order_by(desc(Homework.uploaded_at))
         )
 
         return result.scalars().all()
@@ -231,8 +231,9 @@ class TestContextBuilder:
         if notes:
             context_parts.append("=== RECENT CLASS NOTES (Last 2 Weeks) ===")
             for i, note in enumerate(notes, 1):
-                context_parts.append(f"\nNote {i}: {note.title}")
-                context_parts.append(f"Date: {note.created_at.strftime('%Y-%m-%d')}")
+                title = note.title if note.title else f"Note {i}"
+                context_parts.append(f"\nNote {i}: {title}")
+                context_parts.append(f"Date: {note.uploaded_at.strftime('%Y-%m-%d')}")
                 if note.ocr_text:
                     # Limit to first 500 characters
                     text_preview = note.ocr_text[:500]
@@ -250,15 +251,20 @@ class TestContextBuilder:
         if homework:
             context_parts.append("=== RECENT HOMEWORK (Last 2 Weeks) ===")
             for i, hw in enumerate(homework, 1):
-                context_parts.append(f"\nHomework {i}: {hw.title}")
-                context_parts.append(f"Date: {hw.created_at.strftime('%Y-%m-%d')}")
-                context_parts.append(f"Status: {hw.status}")
+                context_parts.append(f"\nHomework {i}")
+                context_parts.append(f"Date: {hw.uploaded_at.strftime('%Y-%m-%d')}")
+                context_parts.append(f"Reviewed: {'Yes' if hw.is_reviewed else 'No'}")
                 if hw.ocr_text:
                     # Limit to first 500 characters
                     text_preview = hw.ocr_text[:500]
                     if len(hw.ocr_text) > 500:
                         text_preview += "..."
                     context_parts.append(f"Content: {text_preview}")
+                if hw.corrected_text:
+                    text_preview = hw.corrected_text[:500]
+                    if len(hw.corrected_text) > 500:
+                        text_preview += "..."
+                    context_parts.append(f"Corrected: {text_preview}")
                 context_parts.append("---")
             context_parts.append("")
         else:
@@ -309,10 +315,10 @@ class TestContextBuilder:
                 and_(
                     ClassNote.user_id == user_id,
                     ClassNote.subject_id == subject_id,
-                    ClassNote.created_at >= cutoff_date
+                    ClassNote.uploaded_at >= cutoff_date
                 )
             )
-            .order_by(desc(ClassNote.created_at))
+            .order_by(desc(ClassNote.uploaded_at))
             .limit(max_notes)
         )
         notes = notes_result.scalars().all()
@@ -324,10 +330,10 @@ class TestContextBuilder:
                 and_(
                     Homework.user_id == user_id,
                     Homework.subject_id == subject_id,
-                    Homework.created_at >= cutoff_date
+                    Homework.uploaded_at >= cutoff_date
                 )
             )
-            .order_by(desc(Homework.created_at))
+            .order_by(desc(Homework.uploaded_at))
             .limit(max_homework)
         )
         homework = homework_result.scalars().all()
