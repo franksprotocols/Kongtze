@@ -260,6 +260,8 @@ IMPORTANT CONSTRAINTS:
 7. Consider each subject's difficulty level when planning
 8. Include rest days (1-2 days with no or minimal study)
 9. More difficult subjects may need longer or more frequent sessions
+10. WEEKDAY SESSIONS (Monday-Friday): Schedule EXACTLY 1 session BEFORE dinner (before 19:00) and EXACTLY 2 sessions AFTER dinner (after 19:40)
+11. WEEKEND SESSIONS (Saturday-Sunday): Schedule EXACTLY 2 sessions between 11:00 AM and 4:00 PM (11:00-16:00)
 
 Create a balanced weekly schedule (Monday to Sunday) that respects ALL constraints above.
 
@@ -278,7 +280,7 @@ start_time: Must be in HH:MM:SS format and within the specified time window
 duration_minutes: Must be 30 or 45 ONLY
 subject_name: Must match exactly one of the subjects listed above
 
-CRITICAL: Ensure NO sessions overlap with 19:00-19:40 (dinner time) and ALL sessions are within {preferences.get('startTime', '14:00')} to {preferences.get('endTime', '20:00')}. Maximum 3 sessions per day. Each subject appears only once per day.
+CRITICAL: Ensure NO sessions overlap with 19:00-19:40 (dinner time) and ALL sessions are within {preferences.get('startTime', '14:00')} to {preferences.get('endTime', '20:00')}. Maximum 3 sessions per day. Each subject appears only once per day. Weekdays: 1 before dinner + 2 after dinner. Weekends: 2 sessions between 11:00-16:00.
 """
 
     # Call AI service
@@ -355,6 +357,56 @@ CRITICAL: Ensure NO sessions overlap with 19:00-19:40 (dinner time) and ALL sess
                             validation_errors.append(f"Session at {start_time} conflicts with dinner time (19:00-19:40)")
                     except (ValueError, IndexError) as e:
                         validation_errors.append(f"Invalid time format: {start_time}")
+
+            # Check weekday/weekend session distribution
+            if day in [0, 1, 2, 3, 4]:  # Monday-Friday (weekdays)
+                # Count sessions before and after dinner
+                before_dinner = 0
+                after_dinner = 0
+                for session in day_sessions:
+                    start_time = session.get("start_time", "")
+                    if start_time:
+                        try:
+                            time_parts = start_time.split(":")
+                            if len(time_parts) >= 2:
+                                hour = int(time_parts[0])
+                                minute = int(time_parts[1])
+                                start_minutes = hour * 60 + minute
+
+                                # Before dinner: before 19:00 (1140 minutes)
+                                if start_minutes < 19 * 60:
+                                    before_dinner += 1
+                                # After dinner: after 19:40 (1180 minutes)
+                                elif start_minutes >= 19 * 60 + 40:
+                                    after_dinner += 1
+                        except (ValueError, IndexError):
+                            pass
+
+                if before_dinner != 1:
+                    validation_errors.append(f"Weekday {day} must have exactly 1 session before dinner (has {before_dinner})")
+                if after_dinner != 2:
+                    validation_errors.append(f"Weekday {day} must have exactly 2 sessions after dinner (has {after_dinner})")
+
+            elif day in [5, 6]:  # Saturday-Sunday (weekends)
+                # Check all sessions are between 11:00 and 16:00
+                for session in day_sessions:
+                    start_time = session.get("start_time", "")
+                    if start_time:
+                        try:
+                            time_parts = start_time.split(":")
+                            if len(time_parts) >= 2:
+                                hour = int(time_parts[0])
+                                minute = int(time_parts[1])
+                                start_minutes = hour * 60 + minute
+
+                                # Must be between 11:00 (660 min) and 16:00 (960 min)
+                                if start_minutes < 11 * 60 or start_minutes >= 16 * 60:
+                                    validation_errors.append(f"Weekend session at {start_time} must be between 11:00 and 16:00")
+                        except (ValueError, IndexError):
+                            pass
+
+                if len(day_sessions) != 2:
+                    validation_errors.append(f"Weekend day {day} must have exactly 2 sessions (has {len(day_sessions)})")
 
         if validation_errors:
             raise HTTPException(
