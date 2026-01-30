@@ -55,14 +55,14 @@ export default function CalendarPage() {
   // Clear all sessions mutation
   const clearAllMutation = useMutation({
     mutationFn: async () => {
-      // Delete all sessions one by one
-      await Promise.all(sessions.map((session) => studySessionsAPI.delete(session.session_id, token!)));
+      await studySessionsAPI.deleteAll(token!);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['study-sessions'] });
       alert('Calendar cleared successfully!');
     },
-    onError: () => {
+    onError: (error) => {
+      console.error('Failed to clear calendar:', error);
       alert('Failed to clear calendar. Please try again.');
     },
   });
@@ -189,6 +189,11 @@ export default function CalendarPage() {
                                       {session.start_time.slice(0, 5)} ({session.duration_minutes}
                                       min)
                                     </p>
+                                    {session.difficulty_level && (
+                                      <p className="text-xs opacity-75 mt-0.5">
+                                        Level: {['', 'Beginner', 'Intermediate', 'Advanced', 'Expert'][session.difficulty_level]}
+                                      </p>
+                                    )}
                                     {session.title && (
                                       <p className="text-xs truncate mt-1">{session.title}</p>
                                     )}

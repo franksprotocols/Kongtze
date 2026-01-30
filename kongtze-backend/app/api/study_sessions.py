@@ -106,12 +106,14 @@ async def create_study_session(
         day_of_week=session_data.day_of_week,
         start_time=session_data.start_time,
         duration_minutes=session_data.duration_minutes,
+        difficulty_level=session_data.difficulty_level,
         title=session_data.title,
     )
 
     db.add(new_session)
     await db.flush()
     await db.refresh(new_session)
+    await db.commit()
 
     return StudySessionResponse.model_validate(new_session)
 
@@ -175,6 +177,26 @@ async def update_study_session(
     return StudySessionResponse.model_validate(session)
 
 
+@router.delete("/all", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_all_study_sessions(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> None:
+    """
+    Delete all study sessions for the current user.
+    """
+    # Delete all sessions for the current user
+    result = await db.execute(
+        select(StudySession).where(StudySession.user_id == current_user.user_id)
+    )
+    sessions = result.scalars().all()
+
+    for session in sessions:
+        await db.delete(session)
+
+    await db.commit()
+
+
 @router.delete("/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_study_session(
     session_id: int,
@@ -204,6 +226,7 @@ async def delete_study_session(
         )
 
     await db.delete(session)
+    await db.commit()
 
 
 @router.post("/generate-schedule")

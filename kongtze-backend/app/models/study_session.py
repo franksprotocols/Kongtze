@@ -18,6 +18,9 @@ class StudySession(Base):
     start_time: Mapped[time] = mapped_column(Time, nullable=False)
     duration_minutes: Mapped[int] = mapped_column(Integer, default=30)
 
+    # Difficulty level: 1=beginner, 2=intermediate, 3=advanced, 4=expert
+    difficulty_level: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=2)
+
     title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

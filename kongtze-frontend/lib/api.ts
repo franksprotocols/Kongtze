@@ -71,6 +71,9 @@ export const studySessionsAPI = {
 
   delete: (id: number, token: string) =>
     apiClient.delete(`/study-sessions/${id}`, token),
+
+  deleteAll: (token: string) =>
+    apiClient.delete('/study-sessions/all', token),
 };
 
 // Tests API

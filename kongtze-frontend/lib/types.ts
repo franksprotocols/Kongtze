@@ -51,6 +51,7 @@ export interface StudySession {
   day_of_week: number; // 0=Monday, 6=Sunday
   start_time: string; // HH:MM:SS
   duration_minutes: number;
+  difficulty_level?: number; // 1=beginner, 2=intermediate, 3=advanced, 4=expert
   title?: string;
   created_at: string;
   updated_at: string;
@@ -61,6 +62,7 @@ export interface StudySessionCreate {
   day_of_week: number;
   start_time: string;
   duration_minutes?: number;
+  difficulty_level?: number;
   title?: string;
 }
 
@@ -69,6 +71,7 @@ export interface StudySessionUpdate {
   day_of_week?: number;
   start_time?: string;
   duration_minutes?: number;
+  difficulty_level?: number;
   title?: string;
 }
 

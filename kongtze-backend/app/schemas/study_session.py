@@ -11,6 +11,7 @@ class StudySessionBase(BaseModel):
     day_of_week: int = Field(..., ge=0, le=6, description="0=Monday, 6=Sunday")
     start_time: time
     duration_minutes: int = Field(default=30, ge=15, le=120)
+    difficulty_level: Optional[int] = Field(default=2, ge=1, le=4, description="1=beginner, 2=intermediate, 3=advanced, 4=expert")
     title: Optional[str] = Field(None, max_length=255)
 
 
@@ -25,6 +26,7 @@ class StudySessionUpdate(BaseModel):
     day_of_week: Optional[int] = Field(None, ge=0, le=6)
     start_time: Optional[time] = None
     duration_minutes: Optional[int] = Field(None, ge=15, le=120)
+    difficulty_level: Optional[int] = Field(None, ge=1, le=4)
     title: Optional[str] = Field(None, max_length=255)
 
 

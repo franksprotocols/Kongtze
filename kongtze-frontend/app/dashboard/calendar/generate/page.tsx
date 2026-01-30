@@ -99,18 +99,29 @@ export default function GenerateSchedulePage() {
 
   const createSessionsMutation = useMutation({
     mutationFn: async () => {
+      // Map difficulty text to numeric level
+      const difficultyMap: Record<string, number> = {
+        'beginner': 1,
+        'intermediate': 2,
+        'advanced': 3,
+      };
+
       // Create all sessions from generated schedule
-      const sessionPromises = generatedSchedule.map((session) =>
-        studySessionsAPI.create(
+      const sessionPromises = generatedSchedule.map((session) => {
+        const difficultyText = preferences.subjectDifficulties[session.subject_id] || 'intermediate';
+        const difficultyLevel = difficultyMap[difficultyText] || 2;
+
+        return studySessionsAPI.create(
           {
             subject_id: session.subject_id,
             day_of_week: session.day_of_week,
             start_time: session.start_time,
             duration_minutes: session.duration_minutes,
+            difficulty_level: difficultyLevel,
           },
           token!
-        )
-      );
+        );
+      });
       await Promise.all(sessionPromises);
 
       // Create tests if checkbox is checked
@@ -118,14 +129,24 @@ export default function GenerateSchedulePage() {
         // Get unique subject IDs from schedule
         const uniqueSubjectIds = [...new Set(generatedSchedule.map((s) => s.subject_id))];
 
-        // Create a test for each subject
+        // Map difficulty text to numeric level
+        const difficultyMap: Record<string, number> = {
+          'beginner': 1,
+          'intermediate': 2,
+          'advanced': 3,
+        };
+
+        // Create a test for each subject using their selected difficulty
         const testPromises = uniqueSubjectIds.map((subjectId) => {
           const subject = subjects.find((s) => s.subject_id === subjectId);
+          const difficultyText = preferences.subjectDifficulties[subjectId] || 'intermediate';
+          const difficultyLevel = difficultyMap[difficultyText] || 2;
+
           return testsAPI.create(
             {
               subject_id: subjectId,
               title: `Practice Test for ${subject?.display_name || 'Subject'}`,
-              difficulty_level: 2, // Intermediate
+              difficulty_level: difficultyLevel,
               time_limit_minutes: 30,
               total_questions: 10,
               generation_mode: 'pure_ai',
@@ -145,6 +166,10 @@ export default function GenerateSchedulePage() {
         alert(`Schedule created with ${data.testsCreated} practice tests!`);
       }
       router.push('/dashboard/calendar');
+    },
+    onError: (error) => {
+      console.error('Failed to create schedule:', error);
+      alert('Failed to create schedule. Please try again.');
     },
   });
 
@@ -335,7 +360,7 @@ export default function GenerateSchedulePage() {
                   Generate practice tests for scheduled subjects
                 </label>
                 <p className="text-sm text-gray-600 mt-1">
-                  Automatically create a practice test for each subject in your schedule (10 questions, intermediate difficulty)
+                  Automatically create a practice test for each subject using the difficulty level you selected above
                 </p>
               </div>
             </div>
