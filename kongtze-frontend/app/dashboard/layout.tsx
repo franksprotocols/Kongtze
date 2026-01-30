@@ -90,6 +90,12 @@ export default function DashboardLayout({
               >
                 Rewards
               </Link>
+              <Link
+                href="/dashboard/settings"
+                className="text-gray-700 hover:text-blue-600 font-medium"
+              >
+                ⚙️ Settings
+              </Link>
               {user?.is_parent && (
                 <Link
                   href="/dashboard/students"
