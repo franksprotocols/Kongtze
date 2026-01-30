@@ -20,6 +20,7 @@ export default function TakeTestPage({ params }: { params: Promise<{ id: string 
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [timeLeft, setTimeLeft] = useState(0);
+  const [questionTimeLeft, setQuestionTimeLeft] = useState(0);
   const [hasStarted, setHasStarted] = useState(false);
 
   // Fetch test data
@@ -42,8 +43,23 @@ export default function TakeTestPage({ params }: { params: Promise<{ id: string 
   useEffect(() => {
     if (test && hasStarted) {
       setTimeLeft(test.time_limit_minutes * 60);
+      // Set individual question time limit
+      const currentQuestion = test.questions[currentQuestionIndex];
+      if (currentQuestion) {
+        setQuestionTimeLeft(currentQuestion.time_limit_seconds);
+      }
     }
   }, [test, hasStarted]);
+
+  // Reset question timer when changing questions
+  useEffect(() => {
+    if (test && hasStarted) {
+      const currentQuestion = test.questions[currentQuestionIndex];
+      if (currentQuestion) {
+        setQuestionTimeLeft(currentQuestion.time_limit_seconds);
+      }
+    }
+  }, [currentQuestionIndex, test, hasStarted]);
 
   // Timer countdown
   useEffect(() => {
@@ -57,6 +73,9 @@ export default function TakeTestPage({ params }: { params: Promise<{ id: string 
         }
         return prev - 1;
       });
+
+      // Countdown question timer
+      setQuestionTimeLeft((prev) => Math.max(0, prev - 1));
     }, 1000);
 
     return () => clearInterval(timer);
@@ -177,8 +196,26 @@ export default function TakeTestPage({ params }: { params: Promise<{ id: string 
             </p>
           </div>
 
-          <div className={`text-2xl font-bold ${timeLeft < 60 ? 'text-red-600' : 'text-gray-900'}`}>
-            ⏱️ {formatTime(timeLeft)}
+          <div className="flex items-center gap-4">
+            {/* Question Timer */}
+            <div className="text-center">
+              <p className="text-xs text-gray-500 mb-1">Question Time</p>
+              <div className={`text-lg font-bold ${
+                questionTimeLeft < 10 ? 'text-red-600' :
+                questionTimeLeft < 30 ? 'text-orange-600' :
+                'text-blue-600'
+              }`}>
+                ⏱️ {formatTime(questionTimeLeft)}
+              </div>
+            </div>
+
+            {/* Total Timer */}
+            <div className="text-center border-l pl-4">
+              <p className="text-xs text-gray-500 mb-1">Total Time</p>
+              <div className={`text-lg font-bold ${timeLeft < 60 ? 'text-red-600' : 'text-gray-900'}`}>
+                🕐 {formatTime(timeLeft)}
+              </div>
+            </div>
           </div>
         </div>
 
@@ -189,6 +226,13 @@ export default function TakeTestPage({ params }: { params: Promise<{ id: string 
             style={{ width: `${progress}%` }}
           />
         </div>
+
+        {/* Question Time Warning */}
+        {questionTimeLeft < 10 && questionTimeLeft > 0 && (
+          <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-700 text-center">
+            ⚠️ Less than 10 seconds left for this question!
+          </div>
+        )}
       </div>
 
       {/* Question Card */}
