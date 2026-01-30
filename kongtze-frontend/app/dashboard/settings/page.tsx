@@ -20,34 +20,107 @@ interface PromptTemplate {
   is_system: boolean;
 }
 
+interface StudentProfile {
+  profile_id: number;
+  user_id: number;
+  age: number;
+  grade_level: string;
+  school_name: string;
+  math_proficiency: number;
+  english_proficiency: number;
+  chinese_proficiency: number;
+  science_proficiency: number;
+  strengths_weaknesses: {
+    strengths: string[];
+    weaknesses: string[];
+  };
+  learning_pace: string;
+  notes: string | null;
+}
+
+interface TestResult {
+  result_id: number;
+  test_id: number;
+  score: number;
+  total_points: number;
+  time_taken_seconds: number;
+  submitted_at: string;
+}
+
+interface Note {
+  note_id: number;
+  title: string;
+  subject_id: number;
+  uploaded_at: string;
+}
+
+interface Homework {
+  homework_id: number;
+  title: string;
+  subject_id: number;
+  uploaded_at: string;
+}
+
 export default function SettingsPage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<'prompts' | 'general'>('prompts');
+  const [activeTab, setActiveTab] = useState<'prompts' | 'context' | 'general'>('prompts');
   const [editingTemplate, setEditingTemplate] = useState<number | null>(null);
   const [editedPrompt, setEditedPrompt] = useState<string>('');
 
   // Fetch prompt templates from API
-  const { data: templates, isLoading } = useQuery<PromptTemplate[]>({
+  const { data: templates, isLoading: templatesLoading } = useQuery<PromptTemplate[]>({
     queryKey: ['prompt-templates'],
     queryFn: async () => {
-      const response = await apiClient.get('/prompt-templates', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      return response.data;
+      return await apiClient.get('/prompt-templates', token);
     },
     enabled: !!token,
+  });
+
+  // Fetch student profile
+  const { data: profile, isLoading: profileLoading } = useQuery<StudentProfile>({
+    queryKey: ['student-profile'],
+    queryFn: async () => {
+      return await apiClient.get(`/students/${user?.user_id}/profile`, token);
+    },
+    enabled: !!token && !!user && !user.is_parent,
+  });
+
+  // Fetch recent test results
+  const { data: testResults, isLoading: testsLoading } = useQuery<TestResult[]>({
+    queryKey: ['recent-test-results'],
+    queryFn: async () => {
+      return await apiClient.get('/test-results?limit=5', token);
+    },
+    enabled: !!token && activeTab === 'context',
+  });
+
+  // Fetch recent notes
+  const { data: notes, isLoading: notesLoading } = useQuery<Note[]>({
+    queryKey: ['recent-notes'],
+    queryFn: async () => {
+      return await apiClient.get('/notes?limit=5', token);
+    },
+    enabled: !!token && activeTab === 'context',
+  });
+
+  // Fetch recent homework
+  const { data: homework, isLoading: homeworkLoading } = useQuery<Homework[]>({
+    queryKey: ['recent-homework'],
+    queryFn: async () => {
+      return await apiClient.get('/homework?limit=5', token);
+    },
+    enabled: !!token && activeTab === 'context',
   });
 
   // Update template mutation
   const updateTemplateMutation = useMutation({
     mutationFn: async ({ templateId, promptTemplate }: { templateId: number; promptTemplate: string }) => {
-      const response = await apiClient.put(
+      return await apiClient.put(
         `/prompt-templates/${templateId}`,
         { prompt_template: promptTemplate },
-        { headers: { Authorization: `Bearer ${token}` } }
+        token
       );
-      return response.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['prompt-templates'] });
@@ -75,7 +148,7 @@ export default function SettingsPage() {
     setEditedPrompt('');
   };
 
-  if (isLoading) {
+  if (templatesLoading) {
     return (
       <div className="text-center py-12">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
@@ -83,6 +156,11 @@ export default function SettingsPage() {
       </div>
     );
   }
+
+  const proficiencyLabel = (level: number) => {
+    const labels = ['', 'Beginner', 'Average', 'Intermediate', 'Advanced'];
+    return labels[level] || 'Unknown';
+  };
 
   return (
     <div className="space-y-6">
@@ -104,6 +182,16 @@ export default function SettingsPage() {
             }`}
           >
             AI Prompts
+          </button>
+          <button
+            onClick={() => setActiveTab('context')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'context'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Generation Context
           </button>
           <button
             onClick={() => setActiveTab('general')}
@@ -203,6 +291,194 @@ export default function SettingsPage() {
               </p>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Generation Context Tab */}
+      {activeTab === 'context' && (
+        <div className="space-y-6">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <h3 className="text-sm font-semibold text-blue-900 mb-2">About Generation Context</h3>
+            <p className="text-sm text-blue-800">
+              These parameters are automatically used by the AI when generating tests, schedules, and other content.
+              They provide personalized context to create content tailored to your learning needs.
+            </p>
+          </div>
+
+          {/* Student Profile */}
+          <div className="bg-white rounded-xl shadow-sm p-6 border">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Student Profile</h2>
+            {profileLoading ? (
+              <p className="text-gray-600">Loading profile...</p>
+            ) : profile ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-gray-600">Age</p>
+                    <p className="font-medium">{profile.age} years old</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Grade Level</p>
+                    <p className="font-medium">{profile.grade_level}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">School</p>
+                    <p className="font-medium">{profile.school_name}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Learning Pace</p>
+                    <p className="font-medium capitalize">{profile.learning_pace}</p>
+                  </div>
+                </div>
+
+                <div className="border-t pt-4">
+                  <h3 className="text-sm font-semibold text-gray-900 mb-3">Subject Proficiency</h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Math:</span>
+                      <span className="text-sm font-medium">{proficiencyLabel(profile.math_proficiency)}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">English:</span>
+                      <span className="text-sm font-medium">{proficiencyLabel(profile.english_proficiency)}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Chinese:</span>
+                      <span className="text-sm font-medium">{proficiencyLabel(profile.chinese_proficiency)}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Science:</span>
+                      <span className="text-sm font-medium">{proficiencyLabel(profile.science_proficiency)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {profile.strengths_weaknesses && (
+                  <div className="border-t pt-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <h3 className="text-sm font-semibold text-green-900 mb-2">Strengths</h3>
+                        <ul className="space-y-1">
+                          {profile.strengths_weaknesses.strengths?.map((strength, idx) => (
+                            <li key={idx} className="text-sm text-gray-700 flex items-start">
+                              <span className="text-green-600 mr-2">✓</span>
+                              {strength}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-semibold text-orange-900 mb-2">Areas for Improvement</h3>
+                        <ul className="space-y-1">
+                          {profile.strengths_weaknesses.weaknesses?.map((weakness, idx) => (
+                            <li key={idx} className="text-sm text-gray-700 flex items-start">
+                              <span className="text-orange-600 mr-2">→</span>
+                              {weakness}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {profile.notes && (
+                  <div className="border-t pt-4">
+                    <h3 className="text-sm font-semibold text-gray-900 mb-2">Additional Notes</h3>
+                    <p className="text-sm text-gray-700">{profile.notes}</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-gray-600">No profile found. A default profile will be created on first use.</p>
+            )}
+          </div>
+
+          {/* Recent Test Results */}
+          <div className="bg-white rounded-xl shadow-sm p-6 border">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Recent Test Performance</h2>
+            {testsLoading ? (
+              <p className="text-gray-600">Loading test results...</p>
+            ) : testResults && testResults.length > 0 ? (
+              <div className="space-y-3">
+                {testResults.map((result) => (
+                  <div key={result.result_id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                    <div>
+                      <p className="text-sm font-medium">Test #{result.test_id}</p>
+                      <p className="text-xs text-gray-600">
+                        {new Date(result.submitted_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-semibold">
+                        {result.score}/{result.total_points}
+                      </p>
+                      <p className="text-xs text-gray-600">
+                        {Math.round((result.score / result.total_points) * 100)}%
+                      </p>
+                    </div>
+                  </div>
+                ))}
+                <p className="text-xs text-gray-500 mt-2">
+                  These results are used to adapt difficulty and question types.
+                </p>
+              </div>
+            ) : (
+              <p className="text-gray-600">No test results yet. Complete some tests to see your performance history.</p>
+            )}
+          </div>
+
+          {/* Recent Notes */}
+          <div className="bg-white rounded-xl shadow-sm p-6 border">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Recent Class Notes</h2>
+            {notesLoading ? (
+              <p className="text-gray-600">Loading notes...</p>
+            ) : notes && notes.length > 0 ? (
+              <div className="space-y-3">
+                {notes.map((note) => (
+                  <div key={note.note_id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                    <div>
+                      <p className="text-sm font-medium">{note.title}</p>
+                      <p className="text-xs text-gray-600">
+                        {new Date(note.uploaded_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+                <p className="text-xs text-gray-500 mt-2">
+                  Recent notes are automatically used as context for test generation.
+                </p>
+              </div>
+            ) : (
+              <p className="text-gray-600">No notes uploaded yet. Upload class notes to improve test relevance.</p>
+            )}
+          </div>
+
+          {/* Recent Homework */}
+          <div className="bg-white rounded-xl shadow-sm p-6 border">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Recent Homework</h2>
+            {homeworkLoading ? (
+              <p className="text-gray-600">Loading homework...</p>
+            ) : homework && homework.length > 0 ? (
+              <div className="space-y-3">
+                {homework.map((hw) => (
+                  <div key={hw.homework_id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                    <div>
+                      <p className="text-sm font-medium">{hw.title}</p>
+                      <p className="text-xs text-gray-600">
+                        {new Date(hw.uploaded_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+                <p className="text-xs text-gray-500 mt-2">
+                  Recent homework is automatically used as context for test generation.
+                </p>
+              </div>
+            ) : (
+              <p className="text-gray-600">No homework uploaded yet. Upload homework to improve test relevance.</p>
+            )}
+          </div>
         </div>
       )}
 
