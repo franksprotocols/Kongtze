@@ -17,6 +17,7 @@ from app.schemas.user import (
     Token,
 )
 from app.api.deps import get_current_parent, get_current_user
+from app.services.student_profile_service import student_profile_service
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -100,6 +101,12 @@ async def register_student(
     db.add(new_student)
     await db.flush()
     await db.refresh(new_student)
+
+    # Create default student profile
+    await student_profile_service.get_or_create_profile(
+        user_id=new_student.user_id,
+        db=db
+    )
 
     return UserResponse.model_validate(new_student)
 

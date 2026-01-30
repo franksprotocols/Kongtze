@@ -75,6 +75,19 @@ async def create_test(
     )
     context_parts.append(comprehensive_context)
 
+    # Auto-select relevant notes and homework if not provided
+    if not test_data.note_ids and not test_data.homework_ids:
+        relevant_content = await test_context_builder.get_relevant_content_ids(
+            user_id=current_user.user_id,
+            subject_id=test_data.subject_id,
+            db=db,
+            max_notes=3,
+            max_homework=2,
+            weeks_back=2
+        )
+        test_data.note_ids = relevant_content["note_ids"]
+        test_data.homework_ids = relevant_content["homework_ids"]
+
     if test_data.note_ids:
         # Fetch notes
         result = await db.execute(
@@ -188,6 +201,7 @@ async def create_test(
         question = Question(
             test_id=new_test.test_id,
             question_text=q_data["question_text"],
+            question_order=i,
             options=q_data["options"],
             correct_answer=q_data["correct_answer"],
             time_limit_seconds=time_limit,
